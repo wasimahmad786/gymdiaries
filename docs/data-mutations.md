@@ -115,7 +115,6 @@ export async function createWorkout(input: CreateWorkoutInput) { ... }
 
 import { z } from 'zod';
 import { auth } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
 import { createWorkout } from '@/data/workouts';
 
 const createWorkoutSchema = z.object({
@@ -125,7 +124,7 @@ const createWorkoutSchema = z.object({
 
 export async function createWorkoutAction(input: { name: string; startedAt: string }) {
   const { userId } = await auth();
-  if (!userId) redirect('/');
+  if (!userId) throw new Error('Unauthenticated');
 
   const parsed = createWorkoutSchema.safeParse(input);
   if (!parsed.success) throw new Error('Invalid input');
@@ -150,7 +149,7 @@ export async function createWorkoutAction(input: { name: string; startedAt: stri
 // ✅ Correct — userId sourced from Clerk server-side
 export async function deleteWorkoutAction(workoutId: string) {
   const { userId } = await auth();
-  if (!userId) redirect('/');
+  if (!userId) throw new Error('Unauthenticated');
 
   await deleteWorkout(userId, workoutId);
 }
@@ -158,6 +157,71 @@ export async function deleteWorkoutAction(workoutId: string) {
 // ❌ Wrong — userId passed in by the caller
 export async function deleteWorkoutAction(userId: string, workoutId: string) { ... }
 ```
+
+---
+
+## Rule: Never call `redirect()` inside a server action — redirect client-side
+
+**Server actions must not call `redirect()` from `next/navigation`. Redirects must be performed client-side after the server action resolves.**
+
+Calling `redirect()` inside a server action throws an internal Next.js error that is used as a control-flow mechanism. This makes error handling brittle and mixes navigation concerns into the data layer.
+
+Instead, server actions should return a value (or simply resolve), and the calling client component is responsible for navigating afterwards using the `useRouter` hook.
+
+```ts
+// ✅ Correct — action returns, client handles navigation
+// src/app/dashboard/workout/new/actions.ts
+'use server';
+
+export async function createWorkoutAction(input: CreateWorkoutInput) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthenticated');
+
+  const parsed = createWorkoutSchema.safeParse(input);
+  if (!parsed.success) throw new Error('Invalid input');
+
+  return createWorkout(userId, parsed.data.name, new Date(parsed.data.startedAt));
+}
+```
+
+```tsx
+// ✅ Correct — client component redirects after the action resolves
+// src/app/dashboard/workout/new/new-workout-form.tsx
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useTransition } from 'react';
+import { createWorkoutAction } from './actions';
+
+export default function NewWorkoutForm() {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    startTransition(async () => {
+      await createWorkoutAction({ name, startedAt });
+      router.push('/dashboard');
+    });
+  }
+  // ...
+}
+```
+
+```ts
+// ❌ Wrong — redirect() called inside the server action
+export async function createWorkoutAction(input: CreateWorkoutInput) {
+  const { userId } = await auth();
+  if (!userId) redirect('/');          // ❌
+
+  await createWorkout(userId, ...);
+  redirect('/dashboard');              // ❌
+}
+```
+
+### Unauthenticated users
+
+The one exception to `redirect()` is protecting pages in **server components** (not server actions). Page-level auth guards in `page.tsx` may still use `redirect('/')` when `userId` is null — this rule applies specifically to server action files (`actions.ts`).
 
 ---
 
@@ -198,7 +262,6 @@ export async function deleteWorkout(userId: string, workoutId: string) {
 
 import { z } from 'zod';
 import { auth } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
 import { createWorkout, deleteWorkout } from '@/data/workouts';
 
 const createWorkoutSchema = z.object({
@@ -207,7 +270,7 @@ const createWorkoutSchema = z.object({
 
 export async function createWorkoutAction(input: { name: string }) {
   const { userId } = await auth();
-  if (!userId) redirect('/');
+  if (!userId) throw new Error('Unauthenticated');
 
   const parsed = createWorkoutSchema.safeParse(input);
   if (!parsed.success) throw new Error('Invalid input');
@@ -221,7 +284,7 @@ const deleteWorkoutSchema = z.object({
 
 export async function deleteWorkoutAction(input: { workoutId: string }) {
   const { userId } = await auth();
-  if (!userId) redirect('/');
+  if (!userId) throw new Error('Unauthenticated');
 
   const parsed = deleteWorkoutSchema.safeParse(input);
   if (!parsed.success) throw new Error('Invalid input');
@@ -243,3 +306,4 @@ export async function deleteWorkoutAction(input: { workoutId: string }) {
 | Parameter types | Explicit TypeScript types — no `FormData` |
 | Input validation | Zod `safeParse` on every action, before any logic |
 | `userId` source | `auth()` from `@clerk/nextjs/server` — never from the caller |
+| Redirects | Never use `redirect()` in actions — redirect client-side with `useRouter` after the action resolves |
