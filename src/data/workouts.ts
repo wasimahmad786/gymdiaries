@@ -14,6 +14,30 @@ export async function createWorkout(
   return workout;
 }
 
+export async function getWorkout(
+  userId: string,
+  workoutId: string,
+): Promise<typeof workouts.$inferSelect | null> {
+  const [workout] = await db
+    .select()
+    .from(workouts)
+    .where(and(eq(workouts.id, workoutId), eq(workouts.userId, userId)));
+  return workout ?? null;
+}
+
+export async function updateWorkout(
+  userId: string,
+  workoutId: string,
+  data: { name: string | null; startedAt: Date },
+): Promise<typeof workouts.$inferSelect> {
+  const [workout] = await db
+    .update(workouts)
+    .set(data)
+    .where(and(eq(workouts.id, workoutId), eq(workouts.userId, userId)))
+    .returning();
+  return workout;
+}
+
 export type WorkoutWithDetails = {
   workout: typeof workouts.$inferSelect;
   exercises: {
