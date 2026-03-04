@@ -2,6 +2,18 @@ import { and, eq, gte, lt } from 'drizzle-orm';
 import db from '@/db';
 import { exercises, sets, workoutExercises, workouts } from '@/db/schema';
 
+export async function createWorkout(
+  userId: string,
+  name: string | null,
+  startedAt: Date,
+): Promise<typeof workouts.$inferSelect> {
+  const [workout] = await db
+    .insert(workouts)
+    .values({ userId, name, startedAt })
+    .returning();
+  return workout;
+}
+
 export type WorkoutWithDetails = {
   workout: typeof workouts.$inferSelect;
   exercises: {
