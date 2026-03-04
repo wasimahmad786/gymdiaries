@@ -1,13 +1,9 @@
-'use client';
-
-import { useState } from 'react';
-import { format } from 'date-fns';
-import { CalendarIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { auth } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
+import { format, parseISO } from 'date-fns';
+import { getWorkoutsByDate } from '@/data/workouts';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -16,87 +12,44 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import DatePicker from './date-picker';
 
-const mockWorkouts = [
-  {
-    id: '1',
-    name: 'Push Day',
-    startedAt: '07:00',
-    duration: '1h 15m',
-    exercises: [
-      {
-        id: 'e1',
-        name: 'Bench Press',
-        category: 'chest',
-        sets: [
-          { setNumber: 1, reps: 10, weightKg: '80.00' },
-          { setNumber: 2, reps: 8,  weightKg: '85.00' },
-          { setNumber: 3, reps: 6,  weightKg: '90.00' },
-        ],
-      },
-      {
-        id: 'e2',
-        name: 'Overhead Press',
-        category: 'shoulders',
-        sets: [
-          { setNumber: 1, reps: 10, weightKg: '50.00' },
-          { setNumber: 2, reps: 8,  weightKg: '55.00' },
-          { setNumber: 3, reps: 6,  weightKg: '57.50' },
-        ],
-      },
-      {
-        id: 'e3',
-        name: 'Tricep Dips',
-        category: 'arms',
-        sets: [
-          { setNumber: 1, reps: 12, weightKg: null },
-          { setNumber: 2, reps: 10, weightKg: null },
-          { setNumber: 3, reps: 8,  weightKg: null },
-        ],
-      },
-    ],
-  },
-];
+export const dynamic = 'force-dynamic';
 
-export default function DashboardPage() {
-  const [date, setDate] = useState<Date>(new Date());
-  const [open, setOpen] = useState(false);
+type Props = {
+  searchParams: Promise<{ date?: string }>;
+};
+
+function formatDuration(start: Date, end: Date | null): string {
+  if (!end) return '';
+  const mins = Math.round((end.getTime() - start.getTime()) / 60000);
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+export default async function DashboardPage({ searchParams }: Props) {
+  const { userId } = await auth();
+  if (!userId) redirect('/');
+
+  const { date: dateParam } = await searchParams;
+  const date = dateParam ?? format(new Date(), 'yyyy-MM-dd');
+
+  const workoutList = await getWorkoutsByDate(userId, date);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10">
       {/* Header */}
       <div className="mb-2 flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-
-        <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="gap-2">
-              <CalendarIcon className="size-4" />
-              {format(date, 'do MMM yyyy')}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="end">
-            <Calendar
-              mode="single"
-              selected={date}
-              onSelect={(d) => {
-                if (d) {
-                  setDate(d);
-                  setOpen(false);
-                }
-              }}
-              initialFocus
-            />
-          </PopoverContent>
-        </Popover>
+        <DatePicker date={date} />
       </div>
 
       <p className="mb-8 text-sm text-muted-foreground">
-        {format(date, 'EEEE, do MMM yyyy')}
+        {format(parseISO(date), 'EEEE, do MMM yyyy')}
       </p>
 
       {/* Workout list */}
-      {mockWorkouts.length === 0 ? (
+      {workoutList.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center text-sm text-muted-foreground">
             No workouts logged for this day.
@@ -104,31 +57,36 @@ export default function DashboardPage() {
         </Card>
       ) : (
         <div className="space-y-6">
-          {mockWorkouts.map((workout) => (
+          {workoutList.map(({ workout, exercises }) => (
             <Card key={workout.id}>
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div>
                     <CardTitle className="text-lg">{workout.name}</CardTitle>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {workout.startedAt} · {workout.duration}
+                      {format(workout.startedAt, 'HH:mm')}
+                      {workout.completedAt && (
+                        <> · {formatDuration(workout.startedAt, workout.completedAt)}</>
+                      )}
                     </p>
                   </div>
                   <Badge variant="secondary">
-                    {workout.exercises.length}{' '}
-                    {workout.exercises.length === 1 ? 'exercise' : 'exercises'}
+                    {exercises.length}{' '}
+                    {exercises.length === 1 ? 'exercise' : 'exercises'}
                   </Badge>
                 </div>
               </CardHeader>
 
               <CardContent className="space-y-5">
-                {workout.exercises.map((exercise) => (
+                {exercises.map(({ exercise, sets }) => (
                   <div key={exercise.id}>
                     <div className="mb-2 flex items-center gap-2">
                       <span className="text-sm font-medium">{exercise.name}</span>
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {exercise.category}
-                      </Badge>
+                      {exercise.category && (
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {exercise.category}
+                        </Badge>
+                      )}
                     </div>
 
                     <Table>
@@ -140,12 +98,12 @@ export default function DashboardPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {exercise.sets.map((set) => (
-                          <TableRow key={set.setNumber}>
+                        {sets.map((set) => (
+                          <TableRow key={set.id}>
                             <TableCell className="text-muted-foreground">
                               {set.setNumber}
                             </TableCell>
-                            <TableCell className="text-right">{set.reps}</TableCell>
+                            <TableCell className="text-right">{set.reps ?? '—'}</TableCell>
                             <TableCell className="text-right">
                               {set.weightKg != null ? `${set.weightKg} kg` : 'BW'}
                             </TableCell>
