@@ -43,7 +43,12 @@ export default async function DashboardPage({ searchParams }: Props) {
       {/* Header */}
       <div className="mb-2 flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <DatePicker date={date} />
+        <div className="flex items-center gap-2">
+          <Button asChild>
+            <Link href="/dashboard/workout/new">Log workout</Link>
+          </Button>
+          <DatePicker date={date} />
+        </div>
       </div>
 
       <p className="mb-8 text-sm text-muted-foreground">
@@ -55,9 +60,6 @@ export default async function DashboardPage({ searchParams }: Props) {
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-16 text-center">
             <p className="text-sm text-muted-foreground">No workouts logged for this day.</p>
-            <Button asChild>
-              <Link href="/dashboard/workout/new">Log workout</Link>
-            </Button>
           </CardContent>
         </Card>
       ) : (

@@ -1,7 +1,8 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect, notFound } from 'next/navigation';
-import { getWorkout } from '@/data/workouts';
+import { getWorkoutWithDetails } from '@/data/workouts';
 import EditWorkoutForm from './edit-workout-form';
+import ExerciseList from './exercise-list';
 
 export default async function EditWorkoutPage({
   params,
@@ -12,13 +13,14 @@ export default async function EditWorkoutPage({
   if (!userId) redirect('/');
 
   const { workoutId } = await params;
-  const workout = await getWorkout(userId, workoutId);
-  if (!workout) notFound();
+  const workoutDetails = await getWorkoutWithDetails(userId, workoutId);
+  if (!workoutDetails) notFound();
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-10">
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight">Edit workout</h1>
-      <EditWorkoutForm workout={workout} />
+    <div className="mx-auto max-w-lg px-4 py-10 space-y-8">
+      <h1 className="text-2xl font-semibold tracking-tight">Edit workout</h1>
+      <EditWorkoutForm workout={workoutDetails.workout} />
+      <ExerciseList workoutId={workoutId} initialExercises={workoutDetails.exercises} />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { and, eq, gte, lt } from 'drizzle-orm';
+import { and, count, eq, gte, lt } from 'drizzle-orm';
 import db from '@/db';
 import { exercises, sets, workoutExercises, workouts } from '@/db/schema';
 
@@ -46,6 +46,80 @@ export type WorkoutWithDetails = {
     sets: (typeof sets.$inferSelect)[];
   }[];
 };
+
+export async function getWorkoutWithDetails(
+  userId: string,
+  workoutId: string,
+): Promise<WorkoutWithDetails | null> {
+  const rows = await db
+    .select()
+    .from(workouts)
+    .leftJoin(workoutExercises, eq(workoutExercises.workoutId, workouts.id))
+    .leftJoin(exercises, eq(exercises.id, workoutExercises.exerciseId))
+    .leftJoin(sets, eq(sets.workoutExerciseId, workoutExercises.id))
+    .where(and(eq(workouts.id, workoutId), eq(workouts.userId, userId)))
+    .orderBy(workoutExercises.order, sets.setNumber);
+
+  if (rows.length === 0) return null;
+
+  const workout = rows[0].workouts;
+  const exerciseMap = new Map<string, WorkoutWithDetails['exercises'][number]>();
+  const result: WorkoutWithDetails = { workout, exercises: [] };
+
+  for (const row of rows) {
+    const we = row.workout_exercises;
+    const ex = row.exercises;
+    const s = row.sets;
+
+    if (we && ex) {
+      if (!exerciseMap.has(we.id)) {
+        const entry = { workoutExercise: we, exercise: ex, sets: [] as (typeof sets.$inferSelect)[] };
+        exerciseMap.set(we.id, entry);
+        result.exercises.push(entry);
+      }
+      if (s) {
+        exerciseMap.get(we.id)!.sets.push(s);
+      }
+    }
+  }
+
+  return result;
+}
+
+export async function addExerciseToWorkout(
+  workoutId: string,
+  exerciseId: string,
+): Promise<typeof workoutExercises.$inferSelect> {
+  const [{ value: exerciseCount }] = await db
+    .select({ value: count() })
+    .from(workoutExercises)
+    .where(eq(workoutExercises.workoutId, workoutId));
+
+  const [we] = await db
+    .insert(workoutExercises)
+    .values({ workoutId, exerciseId, order: exerciseCount + 1 })
+    .returning();
+  return we;
+}
+
+export async function deleteExerciseFromWorkout(
+  userId: string,
+  workoutExerciseId: string,
+): Promise<void> {
+  const [we] = await db
+    .select()
+    .from(workoutExercises)
+    .where(eq(workoutExercises.id, workoutExerciseId));
+  if (!we) return;
+
+  const [workout] = await db
+    .select()
+    .from(workouts)
+    .where(and(eq(workouts.id, we.workoutId), eq(workouts.userId, userId)));
+  if (!workout) throw new Error('Unauthorized');
+
+  await db.delete(workoutExercises).where(eq(workoutExercises.id, workoutExerciseId));
+}
 
 export async function getWorkoutsByDate(
   userId: string,
