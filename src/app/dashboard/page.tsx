@@ -63,7 +63,8 @@ export default async function DashboardPage({ searchParams }: Props) {
       ) : (
         <div className="space-y-6">
           {workoutList.map(({ workout, exercises }) => (
-            <Card key={workout.id}>
+            <Link key={workout.id} href={`/dashboard/workout/${workout.id}`} className="block">
+            <Card className="transition-shadow hover:shadow-md cursor-pointer">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div>
@@ -120,6 +121,7 @@ export default async function DashboardPage({ searchParams }: Props) {
                 ))}
               </CardContent>
             </Card>
+            </Link>
           ))}
         </div>
       )}
