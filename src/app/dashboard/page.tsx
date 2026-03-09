@@ -1,8 +1,10 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
 import { getWorkoutsByDate } from '@/data/workouts';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -51,8 +53,11 @@ export default async function DashboardPage({ searchParams }: Props) {
       {/* Workout list */}
       {workoutList.length === 0 ? (
         <Card>
-          <CardContent className="py-16 text-center text-sm text-muted-foreground">
-            No workouts logged for this day.
+          <CardContent className="flex flex-col items-center gap-4 py-16 text-center">
+            <p className="text-sm text-muted-foreground">No workouts logged for this day.</p>
+            <Button asChild>
+              <Link href="/dashboard/workout/new">Log workout</Link>
+            </Button>
           </CardContent>
         </Card>
       ) : (
