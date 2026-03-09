@@ -8,6 +8,7 @@ import {
 } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Button } from "@/components/ui/button";
+import { ModeToggle } from "./mode-toggle";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -32,7 +33,14 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en">
+      <html lang="en" suppressHydrationWarning>
+        <head>
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `(function(){try{var t=localStorage.getItem('theme');var d=document.documentElement;if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches)){d.classList.add('dark')}else{d.classList.remove('dark')}}catch(e){}})()`,
+            }}
+          />
+        </head>
         <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
           <header className="flex justify-end gap-2 px-4 py-3">
             <Show when="signed-out">
@@ -46,6 +54,7 @@ export default function RootLayout({
             <Show when="signed-in">
               <UserButton />
             </Show>
+            <ModeToggle />
           </header>
           {children}
         </body>
